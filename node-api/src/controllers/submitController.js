@@ -1,23 +1,33 @@
-import {v4} from "uuid";
+import {Submission} from "../models/submissionModel.js";
 import {sendMessage} from "../kafka/producer.js";
 
 
 export const submitCode = async (req, res) => {
-    const {code, language, problemId} = req.body;
+    try{
+        const {userId, code, language, problemId} = req.body;
+        const submission = await Submission.create({
+            userId,
+            problemId,
+            language,
+            code,
+            status: "PENDING"
+        });
+        await sendMessage("code-submission", {
+            submissionId: submission._id.toString(),
+            problemId,
+            userId,
+            code,
+            language,
+        });
 
-    const submissionId = v4();
+        res.status(201).json({
+            message: "Submission received",
+            submissionId: submission._id
+        })
+    }
+    catch(err){
+        console.error("Submission Error: ", err);
+        res.status(500).json({message: "Submission Failed"});
+    }
 
-    const payload = {
-        submissionId,
-        code,
-        language,
-        problemId
-    };
-
-    await sendMessage("code-submissions", payload);
-
-    res.json({
-        message: "Submission received",
-        submissionId
-    });
 }
