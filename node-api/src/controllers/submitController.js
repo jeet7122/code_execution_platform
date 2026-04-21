@@ -12,7 +12,7 @@ export const submitCode = async (req, res) => {
             code,
             status: "PENDING"
         });
-        await sendMessage("code-submission", {
+        await sendMessage("code-submissions", {
             submissionId: submission._id.toString(),
             problemId,
             userId,

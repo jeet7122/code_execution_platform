@@ -1,3 +1,13 @@
 spring:
   application:
     name: code-executor
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/code_execution_db
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: java-code-executor-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
