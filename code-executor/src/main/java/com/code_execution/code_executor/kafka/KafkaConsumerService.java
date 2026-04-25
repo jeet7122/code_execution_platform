@@ -2,8 +2,11 @@ package com.code_execution.code_executor.kafka;
 
 import com.code_execution.code_executor.dto.SubmissionEvent;
 import com.code_execution.code_executor.model.ExecutionResult;
+import com.code_execution.code_executor.model.Problem;
 import com.code_execution.code_executor.model.Submission;
+import com.code_execution.code_executor.model.TestCase;
 import com.code_execution.code_executor.repository.ExecutionResultRepository;
+import com.code_execution.code_executor.repository.ProblemRepository;
 import com.code_execution.code_executor.repository.SubmissionRepository;
 import com.code_execution.code_executor.services.CodeExecutionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,8 +19,6 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 public class KafkaConsumerService {
@@ -26,6 +27,7 @@ public class KafkaConsumerService {
 
     private final SubmissionRepository submissionRepository;
     private final ExecutionResultRepository executionResultRepository;
+    private final ProblemRepository problemRepository;
     private final CodeExecutionService codeExecutionService;
     private final Environment environment;
     private final ObjectMapper objectMapper;
@@ -45,8 +47,32 @@ public class KafkaConsumerService {
             submission.setStatus("RUNNING");
             submissionRepository.save(submission);
 
-            String output = codeExecutionService.executePythonCode(event.getCode());
-            ExecutionResult result = getExecutionResult(event, output);
+            Problem problem = problemRepository.findById(event.getProblemId())
+                    .orElseThrow(() -> new RuntimeException("Problem not found"));
+
+            int passed = 0;
+            int total = problem.getTestCases().size();
+
+            for (TestCase tc : problem.getTestCases()){
+                String output = codeExecutionService.executePythonCode(
+                        event.getCode(),
+                        tc.getInput()
+                );
+                if(normalize(output).equals(normalize(tc.getExpectedOutput()))) passed++;
+
+            }
+            ExecutionResult result = new ExecutionResult();
+            result.setSubmissionId(event.getSubmissionId());
+            result.setTotalTestCases(total);
+            result.setTestCasesPassed(passed);
+
+            if (passed == total) {
+                result.setStatus("SUCCESS");
+            } else if (passed == 0) {
+                result.setStatus("FAILED");
+            } else {
+                result.setStatus("PARTIAL");
+            }
             executionResultRepository.save(result);
             submission.setStatus(result.getStatus());
             submissionRepository.save(submission);
@@ -75,5 +101,9 @@ public class KafkaConsumerService {
         result.setMemory(64L);
         result.setRuntime(120L);
         return result;
+    }
+
+    private String normalize(String s){
+        return s.trim().replaceAll("\\r\\n", "\n");
     }
 }

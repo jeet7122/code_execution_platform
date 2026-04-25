@@ -1,50 +1,52 @@
 package com.code_execution.code_executor.services;
 
-
 import org.springframework.stereotype.Service;
-
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.stream.Collectors;
 
 
 @Service
 public class CodeExecutionServiceImpl implements CodeExecutionService {
     @Override
-    public String executePythonCode(String code) {
+    public String executePythonCode(String code, String input) {
         try {
             ProcessBuilder processBuilder = new ProcessBuilder("python", "-c", code);
             Process process = processBuilder.start();
 
-            BufferedReader output = new BufferedReader(
+            // ✅ Send input
+            if (input != null && !input.isEmpty()) {
+                process.getOutputStream().write(input.getBytes());
+            }
+
+            // 🔥 CRITICAL: close stdin so Python stops waiting
+            process.getOutputStream().close();
+
+            // ✅ Read output
+            BufferedReader outputReader = new BufferedReader(
                     new InputStreamReader(process.getInputStream())
             );
 
-            BufferedReader errorStream = new BufferedReader(
+            String output = outputReader.lines().collect(Collectors.joining("\n"));
+
+            // ✅ Also read errors (IMPORTANT)
+            BufferedReader errorReader = new BufferedReader(
                     new InputStreamReader(process.getErrorStream())
             );
 
-            StringBuilder result = new StringBuilder();
+            String error = errorReader.lines().collect(Collectors.joining("\n"));
 
-            String line;
+            process.waitFor(); // ensure process completes
 
-            while ((line = output.readLine()) != null){
-                result.append(line).append("\n");
+            if (!error.isEmpty()) {
+                return "ERROR: " + error;
             }
 
-            StringBuilder errorResult = new StringBuilder();
-            while ((line = errorStream.readLine()) != null){
-                errorResult.append(line).append("\n");
-            }
-            process.waitFor();
+            return output;
 
-            if (!errorResult.isEmpty()) {
-                return "ERROR: " + errorResult;
-            }
-
-            return result.toString();
-        }
-        catch (Exception e){
-            return "Execution Failed" + e;
+        } catch (Exception e) {
+            return "ERROR: " + e.getMessage();
         }
     }
 }
